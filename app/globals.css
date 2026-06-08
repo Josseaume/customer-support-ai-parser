@@ -4,11 +4,3 @@
 @theme inline {
   --font-sans: "Inter", system-ui, -apple-system, sans-serif;
 }
-
-body {
-  background: #f8fafc; /* slate-50 */
-  color: #0f172a; /* slate-900 */
-  font-family: var(--font-sans);
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
-}

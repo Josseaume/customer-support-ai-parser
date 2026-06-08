@@ -29,6 +29,12 @@ function Pill({ value }: { value: string }) {
   );
 }
 
+/** Display label for a sender: the name, otherwise the email's local part (pseudo). */
+function senderName(from: { name: string; address: string } | null): string {
+  if (!from) return "Unknown sender";
+  return from.name || from.address.split("@")[0];
+}
+
 export default function Home() {
   const [pending, setPending] = useState<Pending[]>([]);
   const [results, setResults] = useState<ParseResult[]>([]);
@@ -210,8 +216,9 @@ export default function Home() {
                   {results.map((row) => (
                     <tr key={row.id} className="align-top transition-colors hover:bg-slate-50">
                       <td className="max-w-xs px-4 py-3">
-                        <p className="truncate text-slate-800">{row.snippet || "—"}</p>
-                        <p className="mt-0.5 text-xs text-slate-400">{row.filename}</p>
+                        <p className="font-medium text-slate-900">{senderName(row.from)}</p>
+                        <p className="text-xs text-slate-500">{row.from?.address ?? "—"}</p>
+                        <p className="mt-1 truncate text-sm text-slate-500">{row.snippet || "—"}</p>
                       </td>
                       <td className="px-4 py-3 font-mono text-xs text-slate-700">
                         {row.ok ? (
