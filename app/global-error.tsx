@@ -15,36 +15,37 @@ export default function GlobalError({
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "#f5f1ea",
-          color: "#0a0a0a",
-          fontFamily: "Georgia, serif",
+          background: "#f8fafc",
+          color: "#0f172a",
+          fontFamily: "Inter, system-ui, -apple-system, sans-serif",
         }}
       >
         <main style={{ textAlign: "center", padding: "2rem" }}>
           <p
             style={{
-              fontSize: 10,
-              letterSpacing: "0.32em",
-              textTransform: "uppercase",
-              color: "#8b6f47",
+              fontSize: 12,
+              fontWeight: 500,
+              color: "#64748b",
               margin: 0,
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
             }}
           >
             Error
           </p>
-          <h2 style={{ fontSize: "2rem", fontWeight: 300, margin: "1rem 0 1.5rem" }}>
+          <h2 style={{ fontSize: "1.5rem", fontWeight: 600, margin: "0.75rem 0 1.25rem" }}>
             Something went wrong
           </h2>
           <button
             onClick={() => reset()}
             style={{
-              background: "#2a2724",
-              color: "#f5f1ea",
+              background: "#0f172a",
+              color: "#fff",
               border: 0,
-              padding: "0.9rem 2rem",
-              textTransform: "uppercase",
-              letterSpacing: "0.2em",
-              fontSize: 12,
+              borderRadius: 8,
+              padding: "0.6rem 1.25rem",
+              fontSize: 14,
+              fontWeight: 500,
               cursor: "pointer",
             }}
           >
