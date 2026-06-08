@@ -4,10 +4,7 @@ const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const DEFAULT_MODEL = "openai/gpt-oss-120b:free";
 const MAX_ATTEMPTS = 2;
 
-/**
- * Instructions sent to the model. They cover every trap in the test dataset:
- * a missing order id, foreign languages, and empty / irrelevant ("noise") emails.
- */
+
 const SYSTEM_PROMPT = `You parse raw customer-support emails into structured data.
 Return ONLY a JSON object with exactly these keys:
   - "order_id": the order reference if the email mentions one (e.g. "ORD-48271"), otherwise null. Never invent one.
@@ -20,7 +17,6 @@ Rules:
   - Output strictly valid JSON, no markdown, no extra text.`;
 
 export interface ExtractOptions {
-  /** Override the model (defaults to the OPENROUTER_MODEL env var, then the free model). */
   model?: string;
   /** Optional abort signal to cancel the request. */
   signal?: AbortSignal;
