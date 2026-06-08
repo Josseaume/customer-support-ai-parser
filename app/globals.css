@@ -1,46 +1,14 @@
-@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,400&family=Italiana&family=Inter:wght@300;400;500&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 
-/* Volume 2 — editorial luxury tokens (matches /site) */
 @theme inline {
-  --color-ivory: #f5f1ea;
-  --color-ivory-soft: #efeae0;
-  --color-ink: #0a0a0a;
-  --color-gold: #8b6f47;
-  --color-taupe: #2a2724;
-  --color-brick: #a23e2a;
-  --color-hair: rgba(10, 10, 10, 0.12);
-  --color-muted: rgba(10, 10, 10, 0.55);
-
-  --font-sans: "Inter", system-ui, sans-serif;
-  --font-serif: "Cormorant Garamond", Georgia, serif;
-  --font-display: "Italiana", Georgia, serif;
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
 }
 
 body {
-  background: var(--color-ivory);
-  color: var(--color-ink);
+  background: #f8fafc; /* slate-50 */
+  color: #0f172a; /* slate-900 */
   font-family: var(--font-sans);
-  font-weight: 300;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-}
-
-/* Brand signature: gold uppercase label preceded by a short rule */
-.overline {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  font-family: var(--font-sans);
-  font-weight: 400;
-  font-size: 10px;
-  letter-spacing: 0.32em;
-  text-transform: uppercase;
-  color: var(--color-gold);
-}
-.overline::before {
-  content: "";
-  width: 18px;
-  height: 1px;
-  background: var(--color-gold);
 }
