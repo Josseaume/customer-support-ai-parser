@@ -16,6 +16,8 @@ const TONE: Record<string, string> = {
   Medium: "bg-amber-50 text-amber-700 ring-amber-600/20",
   Low: "bg-slate-100 text-slate-600 ring-slate-500/20",
   Neutral: "bg-slate-100 text-slate-600 ring-slate-500/20",
+  // "None" = nothing to act on — deliberately muted so it reads as "no signal".
+  None: "bg-slate-50 text-slate-400 ring-slate-300/30",
   Failed: "bg-red-50 text-red-700 ring-red-600/20",
 };
 
