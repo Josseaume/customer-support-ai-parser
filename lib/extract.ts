@@ -121,6 +121,8 @@ export async function extractFromEmail(
       // expected shape. A malformed or hallucinated payload throws here and we retry.
       return EmailExtractionSchema.parse(JSON.parse(stripJsonFences(content)));
     } catch (error) {
+      // A deliberate cancellation should propagate immediately, not burn retries.
+      if (error instanceof Error && error.name === "AbortError") throw error;
       lastError = error;
     }
   }
