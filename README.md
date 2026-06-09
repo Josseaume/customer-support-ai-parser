@@ -13,6 +13,7 @@ missing order IDs, foreign languages, empty / noise emails, and MIME encoding.
 npm install
 cp .env.example .env.local      # then add your OpenRouter key
 npm run dev                     # http://localhost:3000
+npm run eval                    # (with the app running) replays the 13 sample emails → 13/13
 ```
 
 Then drag & drop raw `.eml` files onto the dashboard (samples in `files/`).
@@ -36,9 +37,11 @@ The key is read server-side only; it never reaches the browser.
 
 - **`lib/schema.ts`** — the Zod schema: single source of truth, and it generates the TypeScript type.
 - **`lib/parseEmail.ts`** — decodes the raw `.eml` (quoted-printable, base64 subjects, charsets) into a clean `{ from, subject, body }`.
-- **`lib/extract.ts`** — calls the model with `response_format: json_object`, validates the output against the schema, retries once.
+- **`lib/extract.ts`** — calls the model with structured outputs (`json_schema` derived from the Zod schema), validates with Zod, and retries up to 3× with a temperature jitter so a one-off malformed response isn't repeated.
 - **`app/api/parse/route.ts`** — batches emails; each one is isolated, so a single failure is a row error, never a crash.
-- **`app/page.tsx`** — the drag-and-drop dashboard.
+- **`app/page.tsx`** — the drag-and-drop dashboard. Columns: email (sender + content
+  snippet), order ID, sentiment, urgency — plus a **Notes** column that surfaces the model's
+  `processing_notes` and per-row errors, for transparency.
 
 ## Stack & decisions
 
@@ -49,8 +52,28 @@ The key is read server-side only; it never reaches the browser.
 | --- | --- |
 | **Next.js 15 + TypeScript (strict)** | Front + API in one project; the API route keeps the model key server-side. Pinned to **15** because 16.2.7 has a build regression on the internal error pages. |
 | **OpenRouter — `gpt-oss-120b:free`** | Free for dev/test behind a provider-agnostic interface; flip one identifier (`OPENROUTER_MODEL`) to a paid model for production. Synthetic test data in dev, a zero-retention paid endpoint for real PII. |
-| **Plain `fetch` + Zod** (no AI SDK) | Transparent, dependency-light, and reliable with free models. `json_object` mode + `schema.parse()` + one retry guarantees the output shape. |
+| **Plain `fetch` + Zod** (no AI SDK) | Transparent, dependency-light. `json_schema` structured outputs + `schema.parse()` + a 3× jittered retry guarantee the output shape, even on the free tier. |
 | **postal-mime** | The test emails are MIME-encoded; decode before sending to the model so it gets real text, not `=C3=A9` noise. |
+
+## Model & privacy strategy
+
+The model is a one-line swap (`OPENROUTER_MODEL`) behind a provider-agnostic interface, so
+the choice is driven by the privacy / accuracy / cost trade-off rather than locked in:
+
+| Context | Model | Privacy | Notes |
+| --- | --- | --- | --- |
+| **Demo / dev (current)** | `gpt-oss-120b:free` | synthetic data only | Free and fully multilingual (verified on FR, ES, HE, ZH, RU). The free endpoint has **no zero-retention guarantee** — never send real PII. |
+| **Production, no infra** | a paid **zero-data-retention** endpoint on OpenRouter | contractual ZDR | One-line change; also removes the free tier's occasional malformed JSON and rate limits. |
+| **Maximum confidentiality** _(with more time)_ | a smaller open model run **locally** (larger machine / GPU) | data never leaves the perimeter | No third-party dependency at all. Trade-off: lower raw accuracy than a frontier model, plus hosting / ops cost. |
+
+**Reliability note:** the _free_ endpoint occasionally returns malformed JSON **even with
+structured outputs** (observed ~1 in 10). It is absorbed by Zod validation + a
+temperature-jittered retry, so the user never sees it — and it essentially disappears on a
+paid model that enforces structured outputs.
+
+> See [`model-access-strategy.html`](model-access-strategy.html) for the full model-access
+> decision record, and [`reliability-and-none.html`](reliability-and-none.html) for the
+> reliability fix + the `None` value.
 
 ## Resilience — the traps
 
@@ -61,9 +84,15 @@ crashes on a bad email:
 | --- | --- |
 | Missing order ID | `order_id: null` (schema + prompt; never invented) |
 | Foreign language | decoded by MIME, language noted by the model |
-| Empty / noise email | `Neutral` / `Low` + flagged; blank snippet, never raw headers |
+| Empty / noise email | `None` / `None` + flagged; blank snippet, never raw headers |
 | MIME encoding | decoded by postal-mime |
-| Malformed model output | Zod validation + one retry, otherwise a clean per-row error |
+| Malformed model output | `json_schema` + Zod + a **3× jittered retry**, otherwise a clean per-row error |
+
+> **The last bug, fixed.** The noise email (`"Hello, test."`) used to error out: the free
+> model occasionally returns malformed JSON, and the old retry ran twice at temperature 0 —
+> so it reproduced the same bad output. Switching to structured outputs + a jittered retry
+> closed it. `sentiment` / `urgency` also gained a `None` value for emails with nothing to
+> act on (noise, empty, bare "thanks"). See `reliability-and-none.html` for the full story.
 
 ## Scope & trade-offs
 
@@ -73,8 +102,11 @@ Scope vs. the few-day timeline was in tension, so I scoped **deliberately**:
   trap above, MIME decoding, and a clean branch-per-feature + PR history.
 - **Simplified / deferred on purpose:**
   - **Sequential** email processing — kinder to the free tier's rate limit; bounded concurrency would come with real volume.
-  - **Free model** for now — a paid, privacy-reviewed endpoint is the production path.
-  - **No CI, no persistence, no auth** — out of scope for the timeline (CI is the next planned step).
+  - **Free model** for now — a paid, privacy-reviewed endpoint is the production path
+    (see **Model & privacy strategy**).
+  - **Local model** — running a smaller open model on a larger machine (no third-party
+    dependency, strongest privacy) is the "with more time" direction.
+  - **No persistence, no auth** — out of scope for the timeline.
   - **Mailbox integration** (reading a real inbox) — the "with more time" feature, left out.
 
 ## Working method
