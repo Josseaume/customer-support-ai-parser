@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>The Noise Trap / Postmortem — Volume</title>
+<link rel="icon" type="image/png" href="img/Volume-Favicon.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --ink:#111110;
+    --ink-soft:#3a3a35;
+    --paper:#f4f2ec;
+    --paper-2:#ece9e0;
+    --line:rgba(17,17,16,.16);
+    --line-2:rgba(17,17,16,.30);
+    --mute:#74726a;
+    --white:#ffffff;
+    --display:"Bricolage Grotesque", "Arial Narrow", sans-serif;
+    --body:"Newsreader", Georgia, "Times New Roman", serif;
+    --mono:"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+    --maxw:1080px;
+  }
+
+  *{box-sizing:border-box;}
+  html{-webkit-text-size-adjust:100%;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--body);
+    font-size:18px;
+    line-height:1.62;
+    font-weight:400;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+    overflow-x:hidden;
+  }
+
+  /* paper grain */
+  body::before{
+    content:"";
+    position:fixed; inset:0;
+    pointer-events:none; z-index:9999;
+    opacity:.04;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  ::selection{background:var(--ink); color:var(--paper);}
+
+  .wrap{max-width:var(--maxw); margin:0 auto; padding:0 32px;}
+
+  /* ---------- eyebrow / labels ---------- */
+  .eyebrow{
+    font-family:var(--mono);
+    font-size:12px;
+    font-weight:500;
+    letter-spacing:.28em;
+    text-transform:uppercase;
+  }
+
+  /* ---------- HERO ---------- */
+  .hero{
+    background:var(--ink);
+    color:var(--paper);
+    position:relative;
+    overflow:hidden;
+    padding:48px 0 64px;
+  }
+  .hero::after{ /* diagonal slash motif echoing the logo */
+    content:"";
+    position:absolute;
+    top:-40%; right:8%;
+    width:3px; height:180%;
+    background:rgba(244,242,236,.14);
+    transform:rotate(18deg);
+    transform-origin:center;
+  }
+  .hero .wrap{position:relative; z-index:2;}
+  .hero-top{
+    display:flex; align-items:center; justify-content:space-between;
+    gap:24px; padding-bottom:56px;
+    border-bottom:1px solid rgba(244,242,236,.16);
+  }
+  .brand{display:flex; align-items:center; gap:16px;}
+  .brand img{
+    width:54px; height:54px; border-radius:50%;
+    border:1px solid rgba(244,242,236,.22);
+  }
+  .brand-name{
+    font-family:var(--display);
+    font-weight:700; font-size:19px; letter-spacing:-.01em;
+    line-height:1;
+  }
+  .brand-name span{display:block; font-family:var(--mono); font-size:10.5px; letter-spacing:.22em; color:rgba(244,242,236,.55); font-weight:400; margin-top:6px;}
+  .hero-top .eyebrow{color:rgba(244,242,236,.62); text-align:right;}
+
+  .hero h1{
+    font-family:var(--display);
+    font-weight:800;
+    font-size:clamp(52px, 9vw, 116px);
+    line-height:.92;
+    letter-spacing:-.035em;
+    margin:52px 0 0;
+  }
+  .hero h1 .slash{ color:rgba(244,242,236,.32); font-weight:600; }
+  .hero .dek{
+    font-family:var(--body);
+    font-style:italic;
+    font-size:clamp(19px,2.4vw,25px);
+    line-height:1.4;
+    color:rgba(244,242,236,.78);
+    max-width:32ch;
+    margin:28px 0 0;
+  }
+
+  .meta{
+    display:flex; flex-wrap:wrap; gap:34px;
+    margin-top:52px; padding-top:26px;
+    border-top:1px solid rgba(244,242,236,.16);
+  }
+  .meta div{min-width:120px;}
+  .meta dt{font-family:var(--mono); font-size:10.5px; letter-spacing:.2em; text-transform:uppercase; color:rgba(244,242,236,.5);}
+  .meta dd{margin:7px 0 0; font-family:var(--display); font-weight:600; font-size:15.5px; letter-spacing:-.01em;}
+  .meta .ok{color:var(--paper);}
+  .meta .ok::before{content:"●"; font-size:9px; vertical-align:middle; margin-right:8px; position:relative; top:-2px;}
+
+  /* ---------- SECTIONS ---------- */
+  main{padding:8px 0 0;}
+  .band{
+    padding:74px 0;
+    border-bottom:1px solid var(--line);
+    position:relative;
+  }
+  .band:last-of-type{border-bottom:none;}
+  .sec-head{
+    display:grid;
+    grid-template-columns:auto 1fr;
+    gap:28px; align-items:baseline;
+    margin-bottom:38px;
+  }
+  .sec-num{
+    font-family:var(--display);
+    font-weight:800;
+    font-size:clamp(40px,7vw,84px);
+    line-height:.8;
+    letter-spacing:-.04em;
+    color:transparent;
+    -webkit-text-stroke:1.5px var(--line-2);
+    text-stroke:1.5px var(--line-2);
+  }
+  .sec-titles .eyebrow{color:var(--mute); display:block; margin-bottom:12px;}
+  .sec-titles h2{
+    font-family:var(--display);
+    font-weight:700;
+    font-size:clamp(28px,4vw,42px);
+    line-height:1.02;
+    letter-spacing:-.025em;
+    margin:0;
+  }
+  .lede{
+    font-size:clamp(20px,2.5vw,24px);
+    line-height:1.5;
+    max-width:62ch;
+    margin:0 0 30px;
+  }
+  .lede em{font-style:italic;}
+  p{max-width:68ch;}
+  p strong{font-weight:500;}
+  .col-text{max-width:72ch;}
+  .col-text p + p{margin-top:18px;}
+
+  code{font-family:var(--mono); font-size:.84em; background:rgba(17,17,16,.06); padding:.12em .4em; border-radius:3px;}
+
+  .pull{
+    font-family:var(--display);
+    font-weight:600;
+    font-size:clamp(22px,3vw,30px);
+    line-height:1.18;
+    letter-spacing:-.02em;
+    border-left:3px solid var(--ink);
+    padding:4px 0 4px 26px;
+    margin:38px 0;
+    max-width:32ch;
+  }
+
+  /* ---------- BEFORE / AFTER terminal ---------- */
+  .term{
+    font-family:var(--mono); font-size:13px; line-height:1.7;
+    border:1px solid var(--line-2); border-radius:3px;
+    background:var(--paper-2); padding:20px 22px; margin:8px 0;
+    overflow-x:auto;
+  }
+  .term .lbl{display:block; font-size:10.5px; letter-spacing:.18em; text-transform:uppercase; color:var(--mute); margin-bottom:10px;}
+  .term .bad{color:#8a2b2b;}
+  .term .good{color:#1f5130;}
+  .term .dim{color:var(--mute);}
+
+  /* ---------- REASON / STEP LISTS ---------- */
+  .ix{list-style:none; margin:0; padding:0;}
+  .ix li{
+    display:grid; grid-template-columns:30px 1fr; gap:14px;
+    padding:16px 0; border-top:1px solid var(--line);
+  }
+  .ix li:first-child{border-top:none; padding-top:0;}
+  .ix .n{font-family:var(--mono); font-size:12px; color:var(--mute); padding-top:5px;}
+  .ix h5{font-family:var(--display); font-weight:700; font-size:17.5px; letter-spacing:-.01em; margin:0 0 5px;}
+  .ix h5 code{font-size:.8em;}
+  .ix p{margin:0; font-size:15.5px; line-height:1.5; color:var(--ink-soft); max-width:60ch;}
+
+  /* ---------- MATRIX ---------- */
+  .matrix-wrap{overflow-x:auto; margin-top:14px;}
+  table.matrix{
+    width:100%; border-collapse:collapse; min-width:560px;
+    font-family:var(--mono); font-size:13px;
+  }
+  table.matrix th, table.matrix td{
+    text-align:left; padding:15px 16px; border-bottom:1px solid var(--line);
+    vertical-align:middle;
+  }
+  table.matrix thead th{
+    font-size:11px; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--mute); font-weight:500; border-bottom:1.5px solid var(--ink);
+  }
+  table.matrix thead th.win{color:var(--ink); font-weight:700;}
+  table.matrix tbody th{
+    font-weight:500; color:var(--ink); font-family:var(--body);
+    font-size:16px; letter-spacing:0;
+  }
+  table.matrix td.win{background:rgba(17,17,16,.045);}
+  .dot{display:inline-block; width:11px; height:11px; border-radius:50%; vertical-align:-1px; margin-right:9px;}
+  .d-strong{background:var(--ink);}
+  .d-mid{background:linear-gradient(90deg,var(--ink) 50%, transparent 50%); border:1px solid var(--ink);}
+  .d-weak{background:transparent; border:1px solid var(--line-2);}
+
+  /* ---------- EVAL RESULTS TABLE ---------- */
+  .res-wrap{overflow-x:auto; margin-top:6px;}
+  table.res{width:100%; border-collapse:collapse; min-width:640px; font-family:var(--mono); font-size:12.5px;}
+  table.res th, table.res td{text-align:left; padding:11px 14px; border-bottom:1px solid var(--line);}
+  table.res thead th{font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--mute); font-weight:500; border-bottom:1.5px solid var(--ink);}
+  table.res td.pass{color:#1f5130; font-weight:700;}
+  table.res .none{color:var(--mute);}
+  table.res tbody tr:hover{background:rgba(17,17,16,.03);}
+
+  /* ---------- TWO-GEAR DECISION ---------- */
+  .gears{display:grid; grid-template-columns:1fr 1fr 1fr; gap:18px; margin:30px 0 8px;}
+  .gear{border:1px solid var(--ink); border-radius:2px; padding:24px; position:relative;}
+  .gear.now{background:var(--ink); color:var(--paper);}
+  .gear .eyebrow{color:var(--mute); margin-bottom:14px; display:block;}
+  .gear.now .eyebrow{color:rgba(244,242,236,.6);}
+  .gear h4{font-family:var(--display); font-weight:700; font-size:20px; letter-spacing:-.02em; margin:0 0 10px;}
+  .gear p{margin:0; font-size:15px; line-height:1.5; color:var(--ink-soft); max-width:none;}
+  .gear.now p{color:rgba(244,242,236,.8);}
+  .gear .model{font-family:var(--mono); font-size:11.5px; margin-top:16px; padding-top:14px; border-top:1px solid var(--line); letter-spacing:.01em; word-break:break-all;}
+  .gear.now .model{border-top-color:rgba(244,242,236,.2); color:var(--paper);}
+
+  .tag{font-family:var(--mono); font-size:11px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; white-space:nowrap; padding:6px 12px; border-radius:999px; display:inline-block;}
+  .tag.yes{color:var(--paper); background:var(--ink); border:1px solid var(--ink);}
+  .tag.no{color:var(--mute); border:1px solid var(--line-2); background:transparent;}
+
+  /* ---------- TLDR ---------- */
+  .tldr{
+    background:var(--ink); color:var(--paper);
+    border-radius:2px; padding:clamp(36px,5vw,60px);
+    position:relative; overflow:hidden;
+  }
+  .tldr::after{
+    content:"/"; position:absolute; right:-2%; bottom:-34%;
+    font-family:var(--display); font-weight:800; font-size:clamp(220px,30vw,420px);
+    color:rgba(244,242,236,.05); line-height:1; pointer-events:none;
+  }
+  .tldr .eyebrow{color:rgba(244,242,236,.6);}
+  .tldr p{
+    font-family:var(--display); font-weight:600;
+    font-size:clamp(24px,3.6vw,38px); line-height:1.22; letter-spacing:-.022em;
+    margin:20px 0 0; max-width:26ch; position:relative; z-index:2;
+  }
+  .tldr p .slash{color:rgba(244,242,236,.4);}
+
+  /* ---------- FOOTER ---------- */
+  footer{
+    padding:46px 0 64px; border-top:1px solid var(--line);
+    display:flex; align-items:center; justify-content:space-between; gap:24px;
+    flex-wrap:wrap;
+  }
+  footer .fl{display:flex; align-items:center; gap:14px;}
+  footer img{width:30px; height:30px;}
+  footer .fl b{font-family:var(--display); font-weight:700; letter-spacing:-.01em; font-size:16px;}
+  footer .fr{font-family:var(--mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--mute); text-align:right;}
+
+  /* ---------- print button ---------- */
+  .print-btn{
+    position:fixed; top:22px; right:22px; z-index:50;
+    font-family:var(--mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase;
+    background:var(--paper); color:var(--ink); border:1px solid var(--ink);
+    padding:11px 16px; border-radius:999px; cursor:pointer;
+    transition:transform .18s ease, background .18s ease, color .18s ease;
+  }
+  .print-btn:hover{background:var(--ink); color:var(--paper); transform:translateY(-1px);}
+
+  /* ---------- reveal animation ---------- */
+  @keyframes rise{from{opacity:0; transform:translateY(22px);} to{opacity:1; transform:none;}}
+  .reveal{opacity:0; animation:rise .7s cubic-bezier(.2,.7,.2,1) forwards;}
+  .hero .reveal{animation-duration:.85s;}
+  main .band.reveal{animation-delay:.05s;}
+
+  /* ---------- responsive ---------- */
+  @media (max-width:860px){
+    body{font-size:17px;}
+    .wrap{padding:0 22px;}
+    .hero-top{flex-direction:column; align-items:flex-start; gap:20px;}
+    .hero-top .eyebrow{text-align:left;}
+    .sec-head{grid-template-columns:1fr; gap:10px;}
+    .sec-num{font-size:54px;}
+    .gears{grid-template-columns:1fr;}
+    .meta{gap:24px;}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .reveal{opacity:1; animation:none;}
+    .print-btn{transition:none;}
+  }
+
+  /* ---------- print ---------- */
+  @media print{
+    :root{--paper:#fff; --paper-2:#f0f0ec;}
+    body{font-size:11.5pt;}
+    .print-btn{display:none;}
+    .reveal{opacity:1; animation:none;}
+    .hero, .tldr, .gear.now, .tag.yes{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .band{padding:26px 0; page-break-inside:avoid;}
+    .hero{padding:28px 0 34px;}
+    .ix li, .gear, .tldr, table{page-break-inside:avoid;}
+  }
+</style>
+</head>
+<body>
+
+<button class="print-btn" onclick="window.print()">Print / PDF</button>
+
+<!-- ================= HERO ================= -->
+<header class="hero">
+  <div class="wrap">
+    <div class="hero-top reveal">
+      <div class="brand">
+        <img src="img/logo-volume-2-white-an-d-black-linkedin-300x300.png" alt="Volume logo" />
+        <div class="brand-name">Volume<span>Technical Assessment</span></div>
+      </div>
+      <div class="eyebrow">Postmortem / ADR&#8201;—&#8201;002</div>
+    </div>
+
+    <h1 class="reveal" style="animation-delay:.08s">The Noise<br>Trap <span class="slash">/</span> Fixed</h1>
+    <p class="dek reveal" style="animation-delay:.16s">How the simplest possible email broke a parser that reads five languages flawlessly — and the fix that closed it.</p>
+
+    <dl class="meta reveal" style="animation-delay:.24s">
+      <div><dt>Project</dt><dd>Customer Support AI Parser</dd></div>
+      <div><dt>Author</dt><dd>Arthur Josseaume</dd></div>
+      <div><dt>Date</dt><dd>9 June 2026</dd></div>
+      <div><dt>Status</dt><dd class="ok">Fixed · verified 13/13</dd></div>
+    </dl>
+  </div>
+</header>
+
+<main>
+  <!-- ============ 01 SYMPTOM ============ -->
+  <section class="band reveal">
+    <div class="wrap">
+      <div class="sec-head">
+        <div class="sec-num">01</div>
+        <div class="sec-titles">
+          <span class="eyebrow">The symptom</span>
+          <h2>Five languages pass. &ldquo;Hello, test.&rdquo; crashes.</h2>
+        </div>
+      </div>
+      <p class="lede">Running the full 13-email batch, the parser extracted the right order ID, sentiment and urgency from French, Spanish, <em>Hebrew, Mandarin and Russian</em> — every one correct. Then it failed on the shortest email in the set.</p>
+      <div class="col-text">
+        <p>The culprit was <code>04_noise_irrelevant.eml</code> — body: <strong>&ldquo;Hello, test.&rdquo;</strong> One of the assessment&rsquo;s three named traps (the Noise Trap). It came back not as a clean result but as a row error:</p>
+      </div>
+      <div class="term">
+        <span class="lbl">Observed — batch run</span>
+        <span class="dim">04_noise_irrelevant.eml &rarr;</span> <span class="bad">Could not extract valid data after 2 attempts:<br>SyntaxError: Expected ':' after property name in JSON at position 20</span>
+      </div>
+      <p class="pull">The model nailed Mandarin. It choked on &ldquo;Hello, test.&rdquo;</p>
+      <p>The instinct was &ldquo;the model is bad at some languages.&rdquo; The data said the opposite — so the first job was to find what <em>actually</em> broke.</p>
+    </div>
+  </section>
+
+  <!-- ============ 02 DIAGNOSIS ============ -->
+  <section class="band reveal">
+    <div class="wrap">
+      <div class="sec-head">
+        <div class="sec-num">02</div>
+        <div class="sec-titles">
+          <span class="eyebrow">Diagnosis</span>
+          <h2>Not the language — the JSON</h2>
+        </div>
+      </div>
+      <p class="lede">The failure was never about meaning. It was a malformed-JSON problem, and two compounding causes turned a rare glitch into a guaranteed row error.</p>
+      <ul class="ix">
+        <li><span class="n">01</span><div><h5>The free tier emits broken JSON — even with structured outputs</h5><p>Probing <code>gpt-oss-120b:free</code> directly, roughly 1 response in 10 came back malformed — a stray backslash, a truncated key, trailing <code>} } } }</code> — <em>even</em> with <code>response_format: json_schema, strict: true</code>. The free endpoint routes across providers that don&rsquo;t all honour the constraint.</p></div></li>
+        <li><span class="n">02</span><div><h5>The retry didn&rsquo;t actually retry</h5><p>The original code retried twice — both at <code>temperature: 0</code>. A deterministic model fed the same input produces the same broken output twice. So a single bad roll failed both attempts and became a row error. The retry was there, but it had no second chance to give.</p></div></li>
+      </ul>
+      <p>Crucially, the app never <em>crashed</em> — per-email isolation turned the failure into one clean row error, exactly as designed. But it was an <strong>avoidable</strong> error, and it landed on one of the named traps.</p>
+    </div>
+  </section>
+
+  <!-- ============ 03 THE FIX ============ -->
+  <section class="band reveal">
+    <div class="wrap">
+      <div class="sec-head">
+        <div class="sec-num">03</div>
+        <div class="sec-titles">
+          <span class="eyebrow">The fix</span>
+          <h2>A retry that actually retries</h2>
+        </div>
+      </div>
+      <p class="lede">Three changes in <code>lib/extract.ts</code>, each addressing one link in the chain — and Zod stays the final guarantee.</p>
+      <ul class="ix">
+        <li><span class="n">01</span><div><h5>Structured outputs from the schema</h5><p><code>response_format</code> is now a <code>json_schema</code> <em>derived from the Zod schema</em> via <code>z.toJSONSchema()</code> — one source of truth. Strictly enforced on paid models, best-effort on the free tier.</p></div></li>
+        <li><span class="n">02</span><div><h5>Jittered retry</h5><p>Up to three attempts. The first is <code>temperature: 0</code> for accuracy; retries add a small jitter (<code>0.4</code>) so a one-off malformed roll is <em>not</em> reproduced identically. The retry finally has a real second chance.</p></div></li>
+        <li><span class="n">03</span><div><h5>Zod is still the gate</h5><p>Every response is parsed against <code>EmailExtractionSchema</code>. Anything malformed or off-shape throws here and triggers the next attempt; only valid, correctly-typed data ever reaches the dashboard.</p></div></li>
+      </ul>
+      <div class="term">
+        <span class="lbl">Before &rarr; After</span>
+        <span class="dim">// before</span>  response_format: <span class="bad">json_object</span> &nbsp;·&nbsp; retry 2&times; @ <span class="bad">temp 0</span> (identical)<br>
+        <span class="dim">// after &nbsp;</span>  response_format: <span class="good">json_schema (from Zod)</span> &nbsp;·&nbsp; retry 3&times; @ <span class="good">temp 0 → 0.4 jitter</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 04 A NEW VALUE: NONE ============ -->
+  <section class="band reveal">
+    <div class="wrap">
+      <div class="sec-head">
+        <div class="sec-num">04</div>
+        <div class="sec-titles">
+          <span class="eyebrow">A new value</span>
+          <h2>Saying &ldquo;None&rdquo; out loud</h2>
+        </div>
+      </div>
+      <p class="lede">A noise email isn&rsquo;t really <em>Neutral / Low</em> — it has no sentiment and needs no reply. So sentiment and urgency gained a fourth value, <code>None</code>, for anything with nothing to act on: noise, empty bodies, auto-bounces, bare &ldquo;thanks&rdquo;.</p>
+      <div class="col-text">
+        <p>The free model initially <em>resisted</em> it — told only a rule, it kept labelling &ldquo;Hello, test.&rdquo; as Neutral / Low. Two <strong>few-shot examples</strong> in the prompt fixed that: it now emits <code>None / None</code> on noise and <code>Positive / None</code> on positive feedback, reliably.</p>
+        <p>That raised a fair question — <em>would a different word classify better than &ldquo;None&rdquo;?</em> So we ran an A/B: <code>None</code> vs <code>N/A</code>, zero-shot and few-shot, across traps and control emails.</p>
+      </div>
+      <div class="matrix-wrap">
+        <table class="matrix">
+          <thead>
+            <tr><th>Condition</th><th>Classification correct</th><th>JSON errors</th><th class="win">Real misclassifications</th></tr>
+          </thead>
+          <tbody>
+            <tr><th>None &middot; few-shot</th><td><span class="dot d-strong"></span>10 / 10 valid</td><td>2</td><td class="win"><span class="dot d-strong"></span>0</td></tr>
+            <tr><th>None &middot; zero-shot</th><td><span class="dot d-strong"></span>9 / 9 valid</td><td>3</td><td class="win"><span class="dot d-strong"></span>0</td></tr>
+            <tr><th>N/A &middot; few-shot</th><td><span class="dot d-mid"></span>8 / 9 valid</td><td>2</td><td class="win"><span class="dot d-mid"></span>1 over-trigger</td></tr>
+            <tr><th>N/A &middot; zero-shot</th><td><span class="dot d-strong"></span>10 / 10 valid</td><td>2</td><td class="win"><span class="dot d-strong"></span>0</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="pull">The label was never the problem. JSON reliability was.</p>
+      <p>Both words classify equally well; almost every &ldquo;failure&rdquo; was a JSON error, not a wrong label — and <code>N/A</code> even over-triggered once, tagging a casual &ldquo;just checking in&rdquo; as <code>N/A</code> instead of <code>Low</code>. <strong>Verdict: keep <code>None</code>.</strong> The effort belongs on reliability, which is exactly where it went.</p>
+    </div>
+  </section>
+
+  <!-- ============ 05 VERIFICATION ============ -->
+  <section class="band reveal">
+    <div class="wrap">
+      <div class="sec-head">
+        <div class="sec-num">05</div>
+        <div class="sec-titles">
+          <span class="eyebrow">Verification</span>
+          <h2>From &ldquo;works on my screen&rdquo; to 13&#8201;/&#8201;13</h2>
+        </div>
+      </div>
+      <p class="lede">A reproducible harness — <code>npm run eval</code> — replays all 13 fixtures against the live <code>/api/parse</code> and checks every result. <code>order_id</code> and schema-validity are strict; the subjective Low/Medium/None calls use an acceptable-set so the suite never goes flaky.</p>
+      <div class="res-wrap">
+        <table class="res">
+          <thead><tr><th>Fixture</th><th>Order ID</th><th>Sentiment</th><th>Urgency</th><th></th></tr></thead>
+          <tbody>
+            <tr><td>01_standard</td><td>ORD-48271</td><td>Negative</td><td>High</td><td class="pass">✓</td></tr>
+            <tr><td>02_missing_order_id</td><td class="none">null</td><td>Negative</td><td>High</td><td class="pass">✓</td></tr>
+            <tr><td>03_french</td><td>ORD-91043</td><td>Negative</td><td>High</td><td class="pass">✓</td></tr>
+            <tr><td>04_noise_irrelevant</td><td class="none">null</td><td class="none">None</td><td class="none">None</td><td class="pass">✓</td></tr>
+            <tr><td>05_positive</td><td>ORD-30085</td><td>Positive</td><td class="none">None</td><td class="pass">✓</td></tr>
+            <tr><td>06_spanish</td><td>ORD-77412</td><td>Negative</td><td>High</td><td class="pass">✓</td></tr>
+            <tr><td>07_neutral_no_order</td><td class="none">null</td><td>Neutral</td><td>Medium</td><td class="pass">✓</td></tr>
+            <tr><td>08_empty_body</td><td class="none">null</td><td class="none">None</td><td class="none">None</td><td class="pass">✓</td></tr>
+            <tr><td>09_urgent_wrong_item</td><td>ORD-55930</td><td>Negative</td><td>High</td><td class="pass">✓</td></tr>
+            <tr><td>10_ambiguous</td><td class="none">null</td><td>Neutral</td><td>Low</td><td class="pass">✓</td></tr>
+            <tr><td>11_hebrew</td><td>ORD-63817</td><td>Negative</td><td>High</td><td class="pass">✓</td></tr>
+            <tr><td>12_mandarin</td><td>ORD-29504</td><td>Negative</td><td>High</td><td class="pass">✓</td></tr>
+            <tr><td>13_russian</td><td>ORD-41290</td><td>Negative</td><td>High</td><td class="pass">✓</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="margin-top:22px;"><strong>13 / 13 pass</strong> — every row on its ideal value, including the three traps (missing ID, foreign language, noise) and the borderline judgment calls.</p>
+    </div>
+  </section>
+
+  <!-- ============ 06 MODEL CHOICE ============ -->
+  <section class="band reveal">
+    <div class="wrap">
+      <div class="sec-head">
+        <div class="sec-num">06</div>
+        <div class="sec-titles">
+          <span class="eyebrow">Model choice</span>
+          <h2>Does this mean go paid? No.</h2>
+        </div>
+      </div>
+      <p class="lede">With the retry net in place, the free model passes cleanly. Paid becomes a <em>deployment</em> decision — for privacy and latency — not a rescue. It stays a one-line <code>OPENROUTER_MODEL</code> swap (see ADR-001).</p>
+      <div class="gears">
+        <div class="gear now">
+          <span class="eyebrow">Now / Demo</span>
+          <h4>Free</h4>
+          <p>Multilingual, zero cost, 13/13. Synthetic data only — no zero-retention guarantee. The retry net hides the free tier&rsquo;s JSON wart.</p>
+          <div class="model">gpt-oss-120b:free</div>
+        </div>
+        <div class="gear">
+          <span class="eyebrow">Upgrade / Scale</span>
+          <h4>Paid</h4>
+          <p>Structured outputs strictly enforced → ~0 malformed JSON, no retries, lower latency. Cents on this dataset.</p>
+          <div class="model">gpt-4o-mini · gemini-flash · claude-haiku</div>
+        </div>
+        <div class="gear">
+          <span class="eyebrow">Privacy / With more time</span>
+          <h4>Local</h4>
+          <p>A smaller open model on a larger machine — no third-party dependency, data never leaves the perimeter. Lower accuracy, ops cost.</p>
+          <div class="model">self-hosted open model</div>
+        </div>
+      </div>
+      <p style="margin-top:24px;"><span class="tag yes">Decision</span> &nbsp; Keep <strong>free</strong> for the demo — it works, it&rsquo;s reproducible, and the privacy trade-off is documented. Paid is the upgrade for real PII or volume.</p>
+    </div>
+  </section>
+
+  <!-- ============ TL;DR ============ -->
+  <section class="band reveal" style="border-bottom:none;">
+    <div class="wrap">
+      <div class="tldr">
+        <span class="eyebrow">In one line</span>
+        <p>Languages were never the problem <span class="slash">/</span> JSON reliability was. Fixed with structured outputs and a retry that actually retries. 13&#8201;/&#8201;13.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap" style="display:flex; align-items:center; justify-content:space-between; gap:24px; flex-wrap:wrap; width:100%;">
+    <div class="fl">
+      <img src="img/Volume-Favicon.png" alt="Volume" />
+      <b>Volume</b>
+    </div>
+    <div class="fr">Postmortem / Reliability &amp; None<br>Customer Support AI Parser &middot; 2026</div>
+  </div>
+</footer>
+
+<script>
+  // staggered reveal on scroll
+  const io = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      if (e.isIntersecting) { e.target.style.animationPlayState = "running"; io.unobserve(e.target); }
+    }
+  }, { threshold: 0.08 });
+  document.querySelectorAll("main .band.reveal").forEach((el) => io.observe(el));
+</script>
+
+</body>
+</html>
