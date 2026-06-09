@@ -52,6 +52,22 @@ The key is read server-side only; it never reaches the browser.
 | **Plain `fetch` + Zod** (no AI SDK) | Transparent, dependency-light, and reliable with free models. `json_object` mode + `schema.parse()` + one retry guarantees the output shape. |
 | **postal-mime** | The test emails are MIME-encoded; decode before sending to the model so it gets real text, not `=C3=A9` noise. |
 
+## Model & privacy strategy
+
+The model is a one-line swap (`OPENROUTER_MODEL`) behind a provider-agnostic interface, so
+the choice is driven by the privacy / accuracy / cost trade-off rather than locked in:
+
+| Context | Model | Privacy | Notes |
+| --- | --- | --- | --- |
+| **Demo / dev (current)** | `gpt-oss-120b:free` | synthetic data only | Free and fully multilingual (verified on FR, ES, HE, ZH, RU). The free endpoint has **no zero-retention guarantee** — never send real PII. |
+| **Production, no infra** | a paid **zero-data-retention** endpoint on OpenRouter | contractual ZDR | One-line change; also removes the free tier's occasional malformed JSON and rate limits. |
+| **Maximum confidentiality** _(with more time)_ | a smaller open model run **locally** (larger machine / GPU) | data never leaves the perimeter | No third-party dependency at all. Trade-off: lower raw accuracy than a frontier model, plus hosting / ops cost. |
+
+**Reliability note:** the _free_ endpoint occasionally returns malformed JSON **even with
+structured outputs** (observed ~1 in 10). It is absorbed by Zod validation + a
+temperature-jittered retry, so the user never sees it — and it essentially disappears on a
+paid model that enforces structured outputs.
+
 ## Resilience — the traps
 
 Every email is processed independently and validated by Zod, so the dashboard never
@@ -73,8 +89,11 @@ Scope vs. the few-day timeline was in tension, so I scoped **deliberately**:
   trap above, MIME decoding, and a clean branch-per-feature + PR history.
 - **Simplified / deferred on purpose:**
   - **Sequential** email processing — kinder to the free tier's rate limit; bounded concurrency would come with real volume.
-  - **Free model** for now — a paid, privacy-reviewed endpoint is the production path.
-  - **No CI, no persistence, no auth** — out of scope for the timeline (CI is the next planned step).
+  - **Free model** for now — a paid, privacy-reviewed endpoint is the production path
+    (see **Model & privacy strategy**).
+  - **Local model** — running a smaller open model on a larger machine (no third-party
+    dependency, strongest privacy) is the "with more time" direction.
+  - **No persistence, no auth** — out of scope for the timeline.
   - **Mailbox integration** (reading a real inbox) — the "with more time" feature, left out.
 
 ## Working method
